@@ -37,13 +37,6 @@ func (a *App) HandleText(userID int64, text string) string {
 		case "/start_workout":
 			{
 				user.State = StateAwaitingWorkoutName
-				fmt.Println("Введи название тренировки")
-				var name string
-				//TODO: написать получение названия
-				_, err := a.StartWorkout(userID, name)
-				if err != nil {
-					return "возникла непредвиденная ошибка"
-				}
 				return "Введите название тренировки"
 			}
 		case "/finish_workout":
