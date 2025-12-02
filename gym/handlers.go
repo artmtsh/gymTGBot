@@ -131,12 +131,17 @@ func (a *App) StartWorkout(userID int64, name string) (*Workout, error) {
 func (a *App) AddExercise(userID int64, name string) (*Exercise, error) {
 	// использовать CurrentWorkoutID, создать Exercise, сохранить, обновить CurrentExerciseID
 	st := a.getOrCreateUserState(userID)
-	if st.State != StateAwaitingExerciseName || st.State != StateAwaitingSet {
+	if st.State != StateAwaitingExerciseName && st.State != StateAwaitingSet {
 		return nil, errors.New(ImpossibleToStartNewExercise)
+	}
+	if st.CurrentWorkoutID == nil {
+		return nil, errors.New(NoActiveWorkout)
 	}
 	newExercise := Exercise{ID: a.nextExerciseID,
 		WorkoutID: *st.CurrentWorkoutID,
 		Name:      name}
+	a.exercises[*st.CurrentExerciseID] = &newExercise
+	*st.CurrentExerciseID++
 	a.nextExerciseID++
 	return &newExercise, nil
 }
