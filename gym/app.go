@@ -48,7 +48,7 @@ func (a *App) AddSet(userID int64, weight float64, reps int) (*Set, error) {
 	}
 	st := a.getOrCreateUserState(userID)
 	var newSet Set
-	if st.State == StateAwaitingSet || st.CurrentExerciseID != nil {
+	if st.State == StateAwaitingSet && st.CurrentExerciseID != nil {
 		newSet = Set{a.nextSetID,
 			*st.CurrentExerciseID,
 			weight,
@@ -64,10 +64,9 @@ func (a *App) AddSet(userID int64, weight float64, reps int) (*Set, error) {
 // Завершить текущую тренировку
 func (a *App) FinishWorkout(userID int64) (*Workout, error) {
 	// проставить FinishedAt, сбросить CurrentWorkoutID / CurrentExerciseID, State = Idle
-	var tempWorkout Workout
 	st := a.getOrCreateUserState(userID)
-	if st.CurrentWorkoutID != nil || st.State != StateIdle {
-		w := a.workouts[*st.CurrentWorkoutID]
+	if st.CurrentWorkoutID != nil && st.State != StateIdle {
+		w := *a.workouts[*st.CurrentWorkoutID]
 		if w.FinishedAt == nil {
 			t := time.Now()
 			w.FinishedAt = &t
@@ -75,10 +74,11 @@ func (a *App) FinishWorkout(userID int64) (*Workout, error) {
 	} else {
 		return nil, errors.New(NoActiveWorkout)
 	}
+	id := st.CurrentWorkoutID
 	st.CurrentWorkoutID = nil
 	st.CurrentExerciseID = nil
 	st.State = StateIdle
-	return &tempWorkout, nil
+	return a.workouts[*id], nil
 }
 
 func (a *App) CancelCurrentExercise(userID int64) error {
@@ -88,7 +88,7 @@ func (a *App) CancelCurrentExercise(userID int64) error {
 	}
 	newSets := make(map[int]*Set)
 	for k, v := range a.sets {
-		if k != *a.userStates[userID].CurrentExerciseID {
+		if v.ExerciseID != *a.userStates[userID].CurrentExerciseID {
 			newSets[k] = v
 		}
 	}
@@ -107,6 +107,9 @@ func (a *App) GetLastWorkouts(userID int64, limit int) ([]*Workout, error) {
 	}
 	if len(lastWorkouts) == 0 {
 		return nil, errors.New(ZeroWorkouts)
+	}
+	if limit > len(lastWorkouts) {
+		limit = len(lastWorkouts)
 	}
 	return lastWorkouts[:limit], nil
 }
