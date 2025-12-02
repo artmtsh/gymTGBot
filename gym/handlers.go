@@ -108,6 +108,9 @@ func (a *App) HandleText(userID int64, text string) string {
 // Начать тренировку (когда уже знаем название)
 func (a *App) StartWorkout(userID int64, name string) (*Workout, error) {
 	// создать Workout, сохранить, обновить UserState
+	if strings.TrimSpace(name) == "" {
+		return nil, errors.New(EmptyName)
+	}
 	st := a.getOrCreateUserState(userID)
 	if st.State != StateAwaitingWorkoutName {
 		return nil, errors.New(ImpossibleToStartNewWorkout)
