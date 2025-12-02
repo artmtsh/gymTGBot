@@ -2,7 +2,6 @@ package gym
 
 import (
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -10,11 +9,16 @@ import (
 
 // Получить или создать UserState для пользователя
 func (a *App) getOrCreateUserState(userID int64) *UserState {
-	// реализацию напишешь сам
-	if _, ok := a.userStates[userID]; !ok {
-		a.userStates[userID].State = StateIdle
+	if st, ok := a.userStates[userID]; ok {
+		return st
 	}
-	return a.userStates[userID]
+
+	st := &UserState{
+		UserID: userID,
+		State:  StateIdle,
+	}
+	a.userStates[userID] = st
+	return st
 }
 
 // HandleText обрабатывает любое текстовое сообщение пользователя
