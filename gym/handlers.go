@@ -123,7 +123,7 @@ func (a *App) StartWorkout(userID int64, name string) (*Workout, error) {
 		FinishedAt: nil,
 	}
 	a.workouts[a.nextWorkoutID] = &newWorkout
-	*st.CurrentWorkoutID++
+	a.nextWorkoutID++
 	return &newWorkout, nil
 }
 
