@@ -28,7 +28,7 @@ func (a *App) HandleText(userID int64, text string) string {
 	//  - распознать команды (/start, /start_workout, /finish_workout, /history, /cancel, /new_exercise)
 	//  - посмотреть состояние userState.State
 	//  - вызвать нужные методы (StartWorkout, AddExercise, AddSet, FinishWorkout и т.п.)
-	user := a.userStates[userID]
+	user := a.getOrCreateUserState(userID)
 	arrText := strings.Split(text, " ")
 	if runes := arrText[0]; runes[0] == '/' {
 		switch text {
@@ -92,8 +92,8 @@ func (a *App) HandleText(userID int64, text string) string {
 			if len(arrText) != 2 {
 				return IllegalAmountOfArgs
 			}
-			weight, _ := strconv.ParseFloat(arrText[1], 64)
-			reps, _ := strconv.Atoi(arrText[2])
+			weight, _ := strconv.ParseFloat(arrText[0], 64)
+			reps, _ := strconv.Atoi(arrText[0])
 			_, err := a.AddSet(userID, weight, reps)
 			if err != nil {
 				return ""
