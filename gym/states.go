@@ -8,6 +8,7 @@ const (
 	StateAwaitingWorkoutName              // ждём название тренировки после /start_workout
 	StateAwaitingExerciseName             // ждём название упражнения
 	StateAwaitingSet                      // ждём "вес повторы" для текущего упражнения
+	StateAwaitingLimitForHistory
 )
 
 // Состояние конкретного пользователя
