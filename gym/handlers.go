@@ -1,6 +1,12 @@
 package gym
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+)
 
 // Получить или создать UserState для пользователя
 func (a *App) getOrCreateUserState(userID int64) *UserState {
@@ -18,56 +24,119 @@ func (a *App) HandleText(userID int64, text string) string {
 	//  - распознать команды (/start, /start_workout, /finish_workout, /history, /cancel, /new_exercise)
 	//  - посмотреть состояние userState.State
 	//  - вызвать нужные методы (StartWorkout, AddExercise, AddSet, FinishWorkout и т.п.)
-	switch text {
-	case "/start":
-		return "Привет я умею выполнять следующие команды - /start, /start_workout, /finish_workout, /history, /cancel, /new_exercise"
-	case "start_workout":
-		{
-			fmt.Println("Введи название тренировки")
-			var name string
-			//TODO: написать получение названия
-			_, err := a.StartWorkout(userID, name)
+	user := a.userStates[userID]
+	arrText := strings.Split(text, " ")
+	if runes := arrText[0]; runes[0] == '/' {
+		switch text {
+		case "/start":
+			return "Привет я умею выполнять следующие команды - /start, /start_workout, /finish_workout, /history, /cancel, /new_exercise"
+		case "/start_workout":
+			{
+				user.State = StateAwaitingWorkoutName
+				fmt.Println("Введи название тренировки")
+				var name string
+				//TODO: написать получение названия
+				_, err := a.StartWorkout(userID, name)
+				if err != nil {
+					return "возникла непредвиденная ошибка"
+				}
+				return "Введите название тренировки"
+			}
+		case "/finish_workout":
+			_, err := a.FinishWorkout(userID)
 			if err != nil {
 				return "возникла непредвиденная ошибка"
 			}
-			return "Тренировка " + name + " начата"
+			user.State = StateIdle
+			return "тренировка завершена"
+		case "/history":
+			user.State = StateAwaitingLimitForHistory
+			return "введите количество тренировок о которых хотите узнать"
+		case "cancel":
+			err := a.CancelCurrentExercise(userID)
+			user.State = StateAwaitingExerciseName
+			if err != nil {
+				return ""
+			}
+			return "текущее упражнение удалено"
+		case "/new_exercise":
+			user.State = StateAwaitingExerciseName
+			return "Введите название упражнения"
+		default:
+			return "неизвестная команда"
 		}
-	case "finish_workout":
-		_, err := a.FinishWorkout(userID)
-		if err != nil {
-			return "возникла непредвиденная ошибка"
+	} else {
+		switch user.State {
+		case StateIdle:
+			return UnknownAction
+		case StateAwaitingLimitForHistory:
+			if len(arrText) != 1 {
+				return MoreThanOneValue
+			}
+			n, err := strconv.Atoi(text)
+			if err != nil {
+				return NotANumber
+			}
+			if n < 0 {
+				return NegativeNumber
+			}
+			workouts, err := a.GetLastWorkouts(userID, n)
+			if err != nil {
+				return ""
+			}
+			return a.workoutsToString(workouts)
+		case StateAwaitingExerciseName:
+			_, err := a.AddExercise(userID, text)
+			if err != nil {
+				return ""
+			}
+			return "упражнение " + text + " добавлено"
+		case StateAwaitingSet:
+			if len(arrText) != 2 {
+				return IllegalAmountOfArgs
+			}
+			weight, _ := strconv.ParseFloat(arrText[1], 64)
+			reps, _ := strconv.Atoi(arrText[2])
+			_, err := a.AddSet(userID, weight, reps)
+			if err != nil {
+				return ""
+			}
+			return "введите следующий подход или закончите упражнение"
 		}
-		return "тренировка закончена"
-	case "/history":
-		var limit int
-		//TODO: написать получение количества
-		a.GetLastWorkouts(userID, limit)
-	case "cancel":
-		a.CancelCurrentExercise(userID)
-		return "текущее упражнение удалено"
-	case "new_exercise":
-		var name string
-		//TODO: написать получение названия
-		_, err := a.AddExercise(userID, name)
-		if err != nil {
-			return "возникла непредвиденная ошибка"
-		}
-		return "упражнение " + name + " добавлено"
-	default:
-		return "неизвестная команда"
-
 	}
+
 	return "что то пошло не так"
 }
 
 // Начать тренировку (когда уже знаем название)
 func (a *App) StartWorkout(userID int64, name string) (*Workout, error) {
 	// создать Workout, сохранить, обновить UserState
-	return nil, nil
+	st := a.getOrCreateUserState(userID)
+	if st.State != StateAwaitingWorkoutName {
+		return nil, errors.New(ImpossibleToStartNewWorkout)
+	}
+	st.State = StateAwaitingExerciseName
+	newWorkout := Workout{ID: a.nextWorkoutID,
+		UserID:     userID,
+		Name:       name,
+		StartedAt:  time.Now(),
+		FinishedAt: nil,
+	}
+	a.workouts[a.nextWorkoutID] = &newWorkout
+	*st.CurrentWorkoutID++
+	return &newWorkout, nil
 }
 
 // Добавить упражнение в текущую тренировку пользователя
 func (a *App) AddExercise(userID int64, name string) (*Exercise, error) {
 	// использовать CurrentWorkoutID, создать Exercise, сохранить, обновить CurrentExerciseID
-	return nil, nil
+	st := a.getOrCreateUserState(userID)
+	if st.State != StateAwaitingExerciseName || st.State != StateAwaitingSet {
+		return nil, errors.New(ImpossibleToStartNewExercise)
+	}
+	newExercise := Exercise{ID: a.nextExerciseID,
+		WorkoutID: *st.CurrentWorkoutID,
+		Name:      name}
+	a.nextExerciseID++
+	return &newExercise, nil
 }

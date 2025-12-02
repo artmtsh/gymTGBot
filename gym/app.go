@@ -2,6 +2,8 @@ package gym
 
 import (
 	"errors"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -44,11 +46,11 @@ func (a *App) AddSet(userID int64, weight float64, reps int) (*Set, error) {
 	if reps <= 0 {
 		return nil, errors.New(NegativeReps)
 	}
-
+	st := a.getOrCreateUserState(userID)
 	var newSet Set
-	if a.userStates[userID].State == StateAwaitingSet || a.userStates[userID].CurrentExerciseID != nil {
+	if st.State == StateAwaitingSet || st.CurrentExerciseID != nil {
 		newSet = Set{a.nextSetID,
-			*a.userStates[userID].CurrentExerciseID,
+			*st.CurrentExerciseID,
 			weight,
 			reps}
 		a.sets[a.nextSetID] = &newSet
@@ -62,38 +64,77 @@ func (a *App) AddSet(userID int64, weight float64, reps int) (*Set, error) {
 // Завершить текущую тренировку
 func (a *App) FinishWorkout(userID int64) (*Workout, error) {
 	// проставить FinishedAt, сбросить CurrentWorkoutID / CurrentExerciseID, State = Idle
-	var newWorkout Workout
-	if a.userStates[userID].State == StateAwaitingExerciseName || a.userStates[userID].State == StateAwaitingSet {
-		*a.workouts[*a.userStates[userID].CurrentWorkoutID].FinishedAt = time.Now()
-		newWorkout = *a.workouts[*a.userStates[userID].CurrentWorkoutID]
-		*a.userStates[userID].CurrentExerciseID = a.nextExerciseID
-		*a.userStates[userID].CurrentWorkoutID = a.nextWorkoutID
-		a.userStates[userID].State = StateIdle
+	var tempWorkout Workout
+	st := a.getOrCreateUserState(userID)
+	if st.CurrentWorkoutID != nil || st.State != StateIdle {
+		w := a.workouts[*st.CurrentWorkoutID]
+		if w.FinishedAt == nil {
+			t := time.Now()
+			w.FinishedAt = &t
+		}
 	} else {
 		return nil, errors.New(NoActiveWorkout)
 	}
-	return &newWorkout, nil
+	st.CurrentWorkoutID = nil
+	st.CurrentExerciseID = nil
+	st.State = StateIdle
+	return &tempWorkout, nil
 }
 
-func (a *App) CancelCurrentExercise(userID int64) {
-	newExercises := make(map[int]*Exercise)
-	for k, v := range a.exercises {
+func (a *App) CancelCurrentExercise(userID int64) error {
+	st := a.getOrCreateUserState(userID)
+	if st.State != StateAwaitingSet {
+		return errors.New(NoActiveExercise)
+	}
+	newSets := make(map[int]*Set)
+	for k, v := range a.sets {
 		if k != *a.userStates[userID].CurrentExerciseID {
-			newExercises[k] = v
+			newSets[k] = v
 		}
 	}
-	a.exercises = newExercises
+	st.State = StateAwaitingExerciseName
+	a.sets = newSets
+	return nil
 }
 
 // История тренировок пользователя (последние N)
 func (a *App) GetLastWorkouts(userID int64, limit int) ([]*Workout, error) {
 	var lastWorkouts []*Workout
-	if *a.userStates[userID].CurrentWorkoutID == 0 {
-		return nil, errors.New(ZeroWorkouts)
-	} else {
-		for i := a.userStates[userID].CurrentWorkoutID; *i < limit; *i-- {
-			lastWorkouts = append(lastWorkouts, a.workouts[*i])
+	for _, v := range a.workouts {
+		if v.UserID == userID && v.FinishedAt != nil {
+			lastWorkouts = append(lastWorkouts, v)
 		}
 	}
-	return nil, nil
+	if len(lastWorkouts) == 0 {
+		return nil, errors.New(ZeroWorkouts)
+	}
+	return lastWorkouts[:limit], nil
+}
+
+func (a *App) workoutsToString(workouts []*Workout) string {
+	var resString strings.Builder
+	for _, workout := range workouts {
+		resString.WriteString("Тренировка ")
+		resString.WriteString(workout.Name)
+		resString.WriteByte('\n')
+		for _, exercise := range a.exercises {
+			if exercise.WorkoutID == workout.ID {
+				resString.WriteString("\t Упражнение ")
+				resString.WriteString(exercise.Name)
+				resString.WriteByte(':')
+				resString.WriteByte('\n')
+				for _, set := range a.sets {
+					if set.ExerciseID == exercise.ID {
+						resString.WriteString("/t /t Подход: \n")
+						resString.WriteString("\t \t \t")
+						resString.WriteString(strconv.Itoa(set.Reps))
+						resString.WriteString(" ")
+						resString.WriteString(strconv.FormatFloat(set.Weight, 'f', -1, 64))
+						resString.WriteByte('\n')
+					}
+				}
+			}
+		}
+	}
+	return resString.String()
 }
