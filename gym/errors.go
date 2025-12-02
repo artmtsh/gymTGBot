@@ -15,4 +15,5 @@ const (
 	IllegalAmountOfArgs          = "введено неверное количество аргументов"
 	ImpossibleToStartNewWorkout  = "сейчас невозможно начать новую тренировку"
 	ImpossibleToStartNewExercise = "сейчас невозможно создать новое упражнение"
+	EmptyName                    = "введено пустое название"
 )
