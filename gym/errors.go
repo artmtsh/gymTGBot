@@ -3,8 +3,8 @@ package gym
 const (
 	NoActiveExercise             = "нет активного упражнения"
 	NoActiveWorkout              = "нет активной тренировки"
-	NegativeWeight               = "введен негативный вес"
-	NegativeReps                 = "введен негативный вес"
+	NegativeWeight               = "введен отрицательный вес"
+	NegativeReps                 = "введено отрицательное количество повторений"
 	ZeroWorkouts                 = "у пользователя нет тренировок"
 	NoCmd                        = "вы не ввели команду"
 	MoreThanOneValue             = "введено более одного значения"
