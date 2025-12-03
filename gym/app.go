@@ -66,7 +66,7 @@ func (a *App) FinishWorkout(userID int64) (*Workout, error) {
 	// проставить FinishedAt, сбросить CurrentWorkoutID / CurrentExerciseID, State = Idle
 	st := a.getOrCreateUserState(userID)
 	if st.CurrentWorkoutID != nil && st.State != StateIdle {
-		w := *a.workouts[*st.CurrentWorkoutID]
+		w := a.workouts[*st.CurrentWorkoutID]
 		if w.FinishedAt == nil {
 			t := time.Now()
 			w.FinishedAt = &t
@@ -88,11 +88,19 @@ func (a *App) CancelCurrentExercise(userID int64) error {
 	}
 	newSets := make(map[int]*Set)
 	for k, v := range a.sets {
-		if v.ExerciseID != *a.userStates[userID].CurrentExerciseID {
+		if v.ExerciseID != *st.CurrentExerciseID {
 			newSets[k] = v
 		}
 	}
+	newExercises := make(map[int]*Exercise)
+	for id, exercise := range a.exercises {
+		if exercise.ID != *st.CurrentExerciseID {
+			newExercises[id] = exercise
+		}
+	}
+	st.CurrentExerciseID = nil
 	st.State = StateAwaitingExerciseName
+	a.exercises = newExercises
 	a.sets = newSets
 	return nil
 }
@@ -122,13 +130,14 @@ func (a *App) workoutsToString(workouts []*Workout) string {
 		resString.WriteByte('\n')
 		for _, exercise := range a.exercises {
 			if exercise.WorkoutID == workout.ID {
+				resString.WriteByte('\n')
 				resString.WriteString("\t Упражнение ")
 				resString.WriteString(exercise.Name)
 				resString.WriteByte(':')
 				resString.WriteByte('\n')
 				for _, set := range a.sets {
 					if set.ExerciseID == exercise.ID {
-						resString.WriteString("/t /t Подход: \n")
+						resString.WriteString("\t \t Подход: \n")
 						resString.WriteString("\t \t \t")
 						resString.WriteString(strconv.Itoa(set.Reps))
 						resString.WriteString(" ")

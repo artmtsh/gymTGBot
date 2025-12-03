@@ -49,7 +49,7 @@ func (a *App) HandleText(userID int64, text string) string {
 		case "/history":
 			user.State = StateAwaitingLimitForHistory
 			return "введите количество тренировок о которых хотите узнать"
-		case "cancel":
+		case "/cancel":
 			err := a.CancelCurrentExercise(userID)
 			user.State = StateAwaitingExerciseName
 			if err != nil {
@@ -66,6 +66,14 @@ func (a *App) HandleText(userID int64, text string) string {
 		switch user.State {
 		case StateIdle:
 			return UnknownAction
+		case StateAwaitingWorkoutName:
+			if strings.TrimSpace(text) == "" {
+				return EmptyName
+			}
+			if _, err := a.StartWorkout(userID, text); err != nil {
+				return "не удалось создать тренировку: " + err.Error()
+			}
+			return "Тренировка \"" + text + "\" начата. Введите название первого упражнения."
 		case StateAwaitingLimitForHistory:
 			if len(arrText) != 1 {
 				return MoreThanOneValue
@@ -87,14 +95,20 @@ func (a *App) HandleText(userID int64, text string) string {
 			if err != nil {
 				return ""
 			}
-			return "упражнение " + text + " добавлено"
+			return "упражнение " + text + " добавлено. Введите подход в формате Вес Количество повторений"
 		case StateAwaitingSet:
 			if len(arrText) != 2 {
 				return IllegalAmountOfArgs
 			}
-			weight, _ := strconv.ParseFloat(arrText[0], 64)
-			reps, _ := strconv.Atoi(arrText[0])
-			_, err := a.AddSet(userID, weight, reps)
+			weight, err := strconv.ParseFloat(arrText[0], 64)
+			if err != nil {
+				return NotANumber
+			}
+			reps, err := strconv.Atoi(arrText[1])
+			if err != nil {
+				return NotANumber
+			}
+			_, err = a.AddSet(userID, weight, reps)
 			if err != nil {
 				return ""
 			}
@@ -122,14 +136,20 @@ func (a *App) StartWorkout(userID int64, name string) (*Workout, error) {
 		StartedAt:  time.Now(),
 		FinishedAt: nil,
 	}
+	st.CurrentWorkoutID = &newWorkout.ID
 	a.workouts[a.nextWorkoutID] = &newWorkout
 	a.nextWorkoutID++
+	st.State = StateAwaitingExerciseName
 	return &newWorkout, nil
 }
 
 // Добавить упражнение в текущую тренировку пользователя
 func (a *App) AddExercise(userID int64, name string) (*Exercise, error) {
-	// использовать CurrentWorkoutID, создать Exercise, сохранить, обновить CurrentExerciseID
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, errors.New(EmptyName)
+	}
+
 	st := a.getOrCreateUserState(userID)
 	if st.State != StateAwaitingExerciseName && st.State != StateAwaitingSet {
 		return nil, errors.New(ImpossibleToStartNewExercise)
@@ -137,11 +157,19 @@ func (a *App) AddExercise(userID int64, name string) (*Exercise, error) {
 	if st.CurrentWorkoutID == nil {
 		return nil, errors.New(NoActiveWorkout)
 	}
-	newExercise := Exercise{ID: a.nextExerciseID,
-		WorkoutID: *st.CurrentWorkoutID,
-		Name:      name}
-	a.exercises[*st.CurrentExerciseID] = &newExercise
-	*st.CurrentExerciseID++
+
+	id := a.nextExerciseID
 	a.nextExerciseID++
-	return &newExercise, nil
+
+	ex := &Exercise{
+		ID:        id,
+		WorkoutID: *st.CurrentWorkoutID,
+		Name:      name,
+	}
+
+	a.exercises[id] = ex
+	st.CurrentExerciseID = &id
+	st.State = StateAwaitingSet
+
+	return ex, nil
 }
